@@ -1,0 +1,134 @@
+openapi: 3.0.3
+info:
+  title: Poti API
+  version: 1.0.0
+  description: "Mikrostoritev za izračun poti med dvema točkama (hoja in avtobus LPP) ob podanem času odhoda. Vsak klic vrne eno pot A → B; povratno pot koordinator zahteva z ločenim klicem."
+tags:
+  - name: routes
+    description: "Izračun poti med dvema točkama."
+paths:
+  /api/v1/routes:
+    get:
+      tags: [routes]
+      operationId: getRoute
+      summary: "Pot od A do B ob času T"
+      description: "Izračuna pot od izhodišča do cilja za podan čas odhoda. Pot je sestavljena iz odsekov (hoja in avtobus). Če poti ni mogoče najti, je odgovor še vedno 200 s statusom NO_ROUTE; napaka (502) pomeni, da zunanji ponudnik podatkov ne deluje."
+      parameters:
+        - name: originLat
+          in: query
+          required: true
+          description: "Zemljepisna širina izhodišča (decimalne stopinje, od -90 do 90)."
+          schema: { type: number, format: double, minimum: -90, maximum: 90 }
+        - name: originLon
+          in: query
+          required: true
+          description: "Zemljepisna dolžina izhodišča (decimalne stopinje, od -180 do 180)."
+          schema: { type: number, format: double, minimum: -180, maximum: 180 }
+        - name: destLat
+          in: query
+          required: true
+          description: "Zemljepisna širina cilja (decimalne stopinje, od -90 do 90)."
+          schema: { type: number, format: double, minimum: -90, maximum: 90 }
+        - name: destLon
+          in: query
+          required: true
+          description: "Zemljepisna dolžina cilja (decimalne stopinje, od -180 do 180)."
+          schema: { type: number, format: double, minimum: -180, maximum: 180 }
+        - name: departAt
+          in: query
+          required: true
+          description: "Čas odhoda od izhodišča. Vozni red avtobusov je odvisen od ure, zato je čas obvezen."
+          schema: { type: string, format: date-time }
+      responses:
+        "200":
+          description: "Rezultat izračuna. Velja tudi, kadar poti ni (status NO_ROUTE)."
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Route" }
+        "400":
+          description: "Neveljavni ali manjkajoči parametri."
+        "502":
+          description: "Zunanji ponudnik podatkov o prevozu ne deluje ali vrne napako."
+components:
+  schemas:
+    RouteStatus:
+      type: string
+      description: "Rezultat iskanja poti. OK: pot je najdena. NO_ROUTE: pot v danem času ne obstaja (ni napaka)."
+      enum: [OK, NO_ROUTE]
+    TravelMode:
+      type: string
+      description: "Način premika na odseku poti. WALK: hoja. BUS: avtobus."
+      enum: [WALK, BUS]
+    Place:
+      type: object
+      description: "Točka na poti: avtobusna postaja ali poljubna lokacija."
+      required: [lat, lon]
+      properties:
+        name:
+          type: string
+          description: "Ime postaje ali lokacije. Pri točkah, ki niso postaje (npr. izhodišče), je lahko odsotno."
+        stopId:
+          type: string
+          description: "Identifikator postaje pri ponudniku. Odsoten, če točka ni postaja."
+        lat:
+          type: number
+          format: double
+          description: "Zemljepisna širina (decimalne stopinje)."
+        lon:
+          type: number
+          format: double
+          description: "Zemljepisna dolžina (decimalne stopinje)."
+    Leg:
+      type: object
+      description: "En odsek poti: hoja ali vožnja z eno linijo avtobusa."
+      required: [mode, from, to, departAt, arriveAt, durationSeconds]
+      properties:
+        mode:
+          $ref: "#/components/schemas/TravelMode"
+        from:
+          $ref: "#/components/schemas/Place"
+        to:
+          $ref: "#/components/schemas/Place"
+        departAt:
+          type: string
+          format: date-time
+          description: "Čas odhoda z začetka odseka."
+        arriveAt:
+          type: string
+          format: date-time
+          description: "Čas prihoda na konec odseka."
+        durationSeconds:
+          type: integer
+          format: int32
+          description: "Trajanje odseka v sekundah."
+        distanceMeters:
+          type: integer
+          format: int32
+          description: "Dolžina odseka v metrih. Podana pri hoji (WALK)."
+        line:
+          type: string
+          description: "Oznaka avtobusne linije. Podana samo pri vožnji (BUS)."
+    Route:
+      type: object
+      description: "Rezultat izračuna poti od A do B."
+      required: [status]
+      properties:
+        status:
+          $ref: "#/components/schemas/RouteStatus"
+        departAt:
+          type: string
+          format: date-time
+          description: "Čas odhoda iz izhodišča. Pri statusu NO_ROUTE odsoten."
+        arriveAt:
+          type: string
+          format: date-time
+          description: "Čas prihoda v cilj. Pri statusu NO_ROUTE odsoten."
+        durationSeconds:
+          type: integer
+          format: int32
+          description: "Skupno trajanje poti v sekundah, od odhoda do prihoda (vključno s čakanjem na avtobus). Pri statusu NO_ROUTE odsotno."
+        legs:
+          type: array
+          description: "Odseki poti v vrstnem redu potovanja (hoja in avtobus). Pri statusu NO_ROUTE odsotno."
+          items:
+            $ref: "#/components/schemas/Leg"
