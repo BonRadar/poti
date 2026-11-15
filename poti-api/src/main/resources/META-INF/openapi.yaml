@@ -1,0 +1,55 @@
+openapi: 3.0.3
+info:
+  title: Poti API
+  version: 1.0.0
+paths:
+  /api/v1/routes:
+    get:
+      tags: [routes]
+      operationId: getRoute
+      summary: Route from A to B at time T
+      parameters:
+        - { name: originLat, in: query, required: true, schema: { type: number, format: double, minimum: -90,  maximum: 90 } }
+        - { name: originLon, in: query, required: true, schema: { type: number, format: double, minimum: -180, maximum: 180 } }
+        - { name: destLat,   in: query, required: true, schema: { type: number, format: double, minimum: -90,  maximum: 90 } }
+        - { name: destLon,   in: query, required: true, schema: { type: number, format: double, minimum: -180, maximum: 180 } }
+        - { name: departAt,  in: query, required: true, schema: { type: string, format: date-time } }
+      responses:
+        "200":
+          description: Route calculation result (NO_ROUTE is also a valid 200 response)
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Route" }
+        "400":
+          description: Invalid parameters
+          content:
+            application/problem+json:
+              schema: { $ref: "#/components/schemas/Problem" }
+        "502":
+          description: External provider unavailable
+          content:
+            application/problem+json:
+              schema: { $ref: "#/components/schemas/Problem" }
+components:
+  schemas:
+    RouteStatus:
+      type: string
+      enum: [OK, NO_ROUTE]
+    Route:
+      type: object
+      required: [status]
+      properties:
+        status:          { $ref: "#/components/schemas/RouteStatus" }
+        departAt:        { type: string, format: date-time }
+        arriveAt:        { type: string, format: date-time }
+        durationSeconds: { type: integer, format: int32 }
+        transfers:       { type: integer, format: int32 }
+        walkingMeters:   { type: integer, format: int32 }
+    Problem:
+      type: object
+      properties:
+        type:     { type: string }
+        title:    { type: string }
+        status:   { type: integer, format: int32 }
+        detail:   { type: string }
+        instance: { type: string }
